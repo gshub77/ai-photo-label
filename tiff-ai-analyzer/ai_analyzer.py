@@ -1,4 +1,5 @@
-import openai
+from openai import OpenAI
+import httpx
 from PIL import Image
 import base64
 import io
@@ -6,7 +7,7 @@ from config import OPENAI_API_KEY, MAX_IMAGE_SIZE
 
 class AIAnalyzer:
     def __init__(self):
-        openai.api_key = OPENAI_API_KEY
+        self.client = OpenAI(api_key=OPENAI_API_KEY, http_client=httpx.Client())
         
     def analyze_image(self, image_path, existing_metadata=None):
         try:
@@ -30,8 +31,7 @@ class AIAnalyzer:
                     context += f"Existing keywords: {', '.join(keywords)}. "
             
             # Call OpenAI Vision API
-            client = openai.OpenAI(api_key=OPENAI_API_KEY)
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model="gpt-4-vision-preview",
                 messages=[
                     {
