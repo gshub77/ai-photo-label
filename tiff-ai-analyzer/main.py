@@ -26,10 +26,16 @@ def main():
     # Extract existing metadata
     metadata_reader = MetadataReader(file_path)
     existing_metadata = metadata_reader.extract_metadata()
+    if existing_metadata is None:
+        existing_metadata = {}
+    print(f"Existing metadata: {existing_metadata}")
     
     # Analyze image with AI
     ai_analyzer = AIAnalyzer()
     ai_metadata = ai_analyzer.analyze_image(file_path)
+    if ai_metadata is None:
+        ai_metadata = {}
+    print(f"AI metadata: {ai_metadata}")
     
     # Combine and write metadata
     lightroom_exporter = LightroomExporter()
