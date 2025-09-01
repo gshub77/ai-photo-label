@@ -33,7 +33,7 @@ class LightroomExporter:
                     print("Embedded XMP (pretty):")
                     print(pretty_xml)
                 except Exception:
-                    print(f"Failed to parse embedded XMP. Raw XML follows:\n{xmp_src}")
+                    print("Failed to parse embedded XMP; skipping raw output.")
             
             # Build XMP content
             xmp_content = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -73,11 +73,10 @@ class LightroomExporter:
             try:
                 dom_out = minidom.parseString(xmp_content)
                 pretty_out = dom_out.toprettyxml(indent="  ")
+                print("Exported XMP (pretty):")
+                print(pretty_out)
             except Exception:
                 pretty_out = xmp_content
-
-            print("Exported XMP (pretty):")
-            print(pretty_out)
 
             with open(xmp_path, 'w', encoding='utf-8') as f:
                 f.write(pretty_out)
