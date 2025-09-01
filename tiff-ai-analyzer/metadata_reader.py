@@ -32,4 +32,18 @@ class MetadataReader:
         except Exception as e:
             print(f"Error reading metadata: {e}")
             
+        # Extract embedded XMP packet (XML) from TIFF bytes
+        try:
+            with open(self.file_path, 'rb') as fh:
+                blob = fh.read()
+            start = blob.find(b'<x:xmpmeta')
+            if start != -1:
+                end = blob.find(b'</x:xmpmeta>', start)
+                if end != -1:
+                    end += len(b'</x:xmpmeta>')
+                    xmp_text = blob[start:end].decode('utf-8', errors='replace')
+                    metadata['xmp_xml'] = xmp_text
+        except Exception as xe:
+            print(f"Error extracting XMP: {xe}")
+        
         return metadata

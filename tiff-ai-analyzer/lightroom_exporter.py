@@ -1,3 +1,4 @@
+from xml.dom import minidom
 from PIL import Image
 from PIL.ExifTags import TAGS
 
@@ -9,6 +10,28 @@ class LightroomExporter:
         try:
             # For now, create an XMP sidecar file
             xmp_path = image_path.replace('.tif', '.xmp').replace('.tiff', '.xmp')
+            
+            # Pretty-print embedded XMP XML (if present)
+            xmp_src = None
+            if isinstance(metadata, dict):
+                xmp_src = metadata.get('xmp_xml')
+                if xmp_src is None:
+                    info = metadata.get('info')
+                    if isinstance(info, dict):
+                        # Try some common keys PIL may use
+                        for k in ('XML:com.adobe.xmp', 'xmp', 'XMP'):
+                            val = info.get(k)
+                            if val:
+                                xmp_src = val.decode('utf-8', errors='ignore') if isinstance(val, (bytes, bytearray)) else str(val)
+                                break
+            if xmp_src:
+                try:
+                    dom = minidom.parseString(xmp_src if isinstance(xmp_src, (bytes, bytearray)) else xmp_src.encode('utf-8'))
+                    pretty_xml = dom.toprettyxml(indent="  ").decode('utf-8') if isinstance(pretty_xml := dom.toprettyxml(indent="  "), (bytes, bytearray)) else pretty_xml
+                    print("Embedded XMP (pretty):")
+                    print(pretty_xml)
+                except Exception as e:
+                    print(f"Failed to parse embedded XMP. Raw XML follows:\n{xmp_src}")
             
             # Build XMP content
             xmp_content = '''<?xml version="1.0" encoding="UTF-8"?>
