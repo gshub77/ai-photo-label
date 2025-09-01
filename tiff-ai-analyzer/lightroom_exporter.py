@@ -1,6 +1,6 @@
 from xml.dom import minidom
-from PIL import Image
-from PIL.ExifTags import TAGS
+from xml.sax.saxutils import escape
+import os
 
 class LightroomExporter:
     def __init__(self):
@@ -9,7 +9,8 @@ class LightroomExporter:
     def write_metadata(self, image_path, metadata):
         try:
             # For now, create an XMP sidecar file
-            xmp_path = image_path.replace('.tif', '.xmp').replace('.tiff', '.xmp')
+            root, _ = os.path.splitext(image_path)
+            xmp_path = f"{root}.xmp"
             
             # Pretty-print embedded XMP XML (if present)
             xmp_src = None
@@ -26,11 +27,12 @@ class LightroomExporter:
                                 break
             if xmp_src:
                 try:
-                    dom = minidom.parseString(xmp_src if isinstance(xmp_src, (bytes, bytearray)) else xmp_src.encode('utf-8'))
-                    pretty_xml = dom.toprettyxml(indent="  ").decode('utf-8') if isinstance(pretty_xml := dom.toprettyxml(indent="  "), (bytes, bytearray)) else pretty_xml
+                    xml_str = xmp_src.decode('utf-8', errors='ignore') if isinstance(xmp_src, (bytes, bytearray)) else str(xmp_src)
+                    dom = minidom.parseString(xml_str)
+                    pretty_xml = dom.toprettyxml(indent="  ")
                     print("Embedded XMP (pretty):")
                     print(pretty_xml)
-                except Exception as e:
+                except Exception:
                     print(f"Failed to parse embedded XMP. Raw XML follows:\n{xmp_src}")
             
             # Build XMP content
@@ -44,9 +46,10 @@ class LightroomExporter:
             
             # Add description
             if 'description' in metadata:
+                desc = escape(str(metadata['description']))
                 xmp_content += f'''            <dc:description>
                 <rdf:Alt>
-                    <rdf:li xml:lang="x-default">{metadata['description']}</rdf:li>
+                    <rdf:li xml:lang="x-default">{desc}</rdf:li>
                 </rdf:Alt>
             </dc:description>
 '''
@@ -57,7 +60,7 @@ class LightroomExporter:
                 <rdf:Bag>
 '''
                 for keyword in metadata['keywords']:
-                    xmp_content += f'                    <rdf:li>{keyword}</rdf:li>\n'
+                    xmp_content += f'                    <rdf:li>{escape(str(keyword))}</rdf:li>\n'
                 xmp_content += '''                </rdf:Bag>
             </dc:subject>
 '''
@@ -66,9 +69,18 @@ class LightroomExporter:
     </rdf:RDF>
 </x:xmpmeta>'''
             
-            # Write XMP file
-            with open(xmp_path, 'w') as f:
-                f.write(xmp_content)
+            # Pretty print and write XMP file
+            try:
+                dom_out = minidom.parseString(xmp_content)
+                pretty_out = dom_out.toprettyxml(indent="  ")
+            except Exception:
+                pretty_out = xmp_content
+
+            print("Exported XMP (pretty):")
+            print(pretty_out)
+
+            with open(xmp_path, 'w', encoding='utf-8') as f:
+                f.write(pretty_out)
             
             print(f"Metadata written to: {xmp_path}")
             
