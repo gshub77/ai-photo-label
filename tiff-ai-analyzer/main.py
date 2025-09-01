@@ -28,7 +28,7 @@ def main():
     existing_metadata = metadata_reader.extract_metadata()
     if existing_metadata is None:
         existing_metadata = {}
-    print(f"Existing metadata: {existing_metadata}")
+    # print(f"Existing metadata: {existing_metadata}")
     
     # Analyze image with AI
     ai_analyzer = AIAnalyzer()
