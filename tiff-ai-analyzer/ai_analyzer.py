@@ -254,13 +254,13 @@ class AIAnalyzer:
                 if context:
                     print("DEBUG: Final context for image analysis:\n", context)
             
-            # Call OpenAI Vision API
-            messages = [
+            # Call OpenAI Responses API (multimodal)
+            inputs = [
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "text",
+                            "type": "input_text",
                             "text": f"""{context}Task: Analyze this image.
 
 Constraints and requirements:
@@ -276,10 +276,8 @@ Output strictly valid JSON with the following keys:
 - people: an array of person names present in the image, using only the provided names from the face regions when available; otherwise use the "Known people in image" list."""
                         },
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{img_base64}"
-                            }
+                            "type": "input_image",
+                            "image_url": f"data:image/png;base64,{img_base64}"
                         }
                     ]
                 }
@@ -287,25 +285,26 @@ Output strictly valid JSON with the following keys:
             import json
             payload = {
                 "model": "gpt-5",
-                "messages": messages
+                "input": inputs,
+                "reasoning": {"effort": "high"},
+                "verbosity": "high"
             }
             try:
                 # Print sanitized payload without embedding the base64 image data
                 print("DEBUG: OpenAI request payload (sanitized):")
                 sanitized = json.loads(json.dumps(payload))
-                for _m in sanitized.get("messages", []):
-                    if isinstance(_m, dict):
-                        contents = _m.get("content", [])
+                for item in sanitized.get("input", []):
+                    if isinstance(item, dict):
+                        contents = item.get("content", [])
                         if isinstance(contents, list):
-                            for _p in contents:
-                                if isinstance(_p, dict) and _p.get("type") == "image_url":
-                                    img = _p.get("image_url")
-                                    if isinstance(img, dict) and "url" in img:
-                                        img["url"] = "data:image/png;base64,[omitted]"
+                            for part in contents:
+                                if isinstance(part, dict) and part.get("type") == "input_image":
+                                    if "image_url" in part:
+                                        part["image_url"] = "data:image/png;base64,[omitted]"
                 print(json.dumps(sanitized, indent=2))
             except Exception as _e:
                 print("DEBUG: Failed to pretty-print request payload:", _e)
-            response = self.client.chat.completions.create(**payload)
+            response = self.client.responses.create(**payload)
             # Print raw response for debugging
             try:
                 print("DEBUG: OpenAI raw response:")
@@ -317,7 +316,7 @@ Output strictly valid JSON with the following keys:
                 print("DEBUG: Failed to print raw response:", _e)
             
             # Parse response
-            result_text = response.choices[0].message.content
+            result_text = getattr(response, "output_text", None) or str(response)
             
             # Try to parse as JSON, fallback to text parsing
             try:
