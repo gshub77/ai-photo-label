@@ -269,8 +269,19 @@ Output strictly valid JSON with the following keys:
                 "messages": messages
             }
             try:
-                print("DEBUG: OpenAI request payload:")
-                print(json.dumps(payload, indent=2))
+                # Print sanitized payload without embedding the base64 image data
+                print("DEBUG: OpenAI request payload (sanitized):")
+                sanitized = json.loads(json.dumps(payload))
+                for _m in sanitized.get("messages", []):
+                    if isinstance(_m, dict):
+                        contents = _m.get("content", [])
+                        if isinstance(contents, list):
+                            for _p in contents:
+                                if isinstance(_p, dict) and _p.get("type") == "image_url":
+                                    img = _p.get("image_url")
+                                    if isinstance(img, dict) and "url" in img:
+                                        img["url"] = "data:image/png;base64,[omitted]"
+                print(json.dumps(sanitized, indent=2))
             except Exception as _e:
                 print("DEBUG: Failed to pretty-print request payload:", _e)
             response = self.client.chat.completions.create(**payload)
