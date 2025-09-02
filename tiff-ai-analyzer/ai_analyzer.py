@@ -234,15 +234,13 @@ class AIAnalyzer:
                     print("DEBUG: Final context for image analysis:\n", context)
             
             # Call OpenAI Vision API
-            response = self.client.chat.completions.create(
-                model="gpt-5",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"""{context}Task: Analyze this image.
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""{context}Task: Analyze this image.
 
 Constraints and requirements:
 - Use provided person names exactly as given (from "Known people in image" and "Face regions"); do not invent names. If a face lacks a provided name, refer to it generically (e.g., "unknown person") and do not add a new name.
@@ -255,20 +253,38 @@ Output strictly valid JSON with the following keys:
 - description: 1-2 sentences that naturally mention the provided person name(s) as the subject when applicable (avoid "labeled" phrasing).
 - keywords: a single comma-separated string containing all existing keywords plus any new ones you add (no duplicates).
 - people: an array of person names present in the image, using only the provided names."""
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{img_base64}"
-                                }
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{img_base64}"
                             }
-                        ]
-                    }
-                ]
-            )
+                        }
+                    ]
+                }
+            ]
+            import json
+            payload = {
+                "model": "gpt-5",
+                "messages": messages
+            }
+            try:
+                print("DEBUG: OpenAI request payload:")
+                print(json.dumps(payload, indent=2))
+            except Exception as _e:
+                print("DEBUG: Failed to pretty-print request payload:", _e)
+            response = self.client.chat.completions.create(**payload)
+            # Print raw response for debugging
+            try:
+                print("DEBUG: OpenAI raw response:")
+                try:
+                    print(response.model_dump_json(indent=2))
+                except Exception:
+                    print(str(response))
+            except Exception as _e:
+                print("DEBUG: Failed to print raw response:", _e)
             
             # Parse response
-            import json
             result_text = response.choices[0].message.content
             
             # Try to parse as JSON, fallback to text parsing
