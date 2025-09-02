@@ -37,9 +37,42 @@ def main():
         ai_metadata = {}
     print(f"AI metadata: {ai_metadata}")
     
-    # Combine and write metadata
+    # Combine and write metadata (preserve original tags and add AI tags)
+    def _normalize_keywords(val):
+        if not val:
+            return []
+        if isinstance(val, str):
+            return [k.strip() for k in val.split(',') if k.strip()]
+        try:
+            result = []
+            for item in val:
+                if item is None:
+                    continue
+                if isinstance(item, str):
+                    parts = [p.strip() for p in item.split(',') if p.strip()]
+                    result.extend(parts)
+                else:
+                    result.append(str(item))
+            return result
+        except TypeError:
+            s = str(val).strip()
+            return [s] if s else []
+
+    existing_kw = _normalize_keywords(existing_metadata.get('keywords'))
+    ai_kw = _normalize_keywords(ai_metadata.get('keywords'))
+    combined_kw = []
+    seen = set()
+    for k in existing_kw + ai_kw:
+        if k not in seen:
+            seen.add(k)
+            combined_kw.append(k)
+
+    combined_metadata = {**existing_metadata, **ai_metadata}
+    if combined_kw:
+        combined_metadata['keywords'] = combined_kw
+
     lightroom_exporter = LightroomExporter()
-    lightroom_exporter.write_metadata(file_path, {**existing_metadata, **ai_metadata})
+    lightroom_exporter.write_metadata(file_path, combined_metadata)
     
     print("Analysis complete!")
 
