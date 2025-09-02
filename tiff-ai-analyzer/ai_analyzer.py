@@ -186,7 +186,7 @@ class AIAnalyzer:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"{context}Analyze this image. If tags or names are provided, incorporate them into the description when applicable. Provide: 1) A brief description, 2) Keywords for Lightroom (comma-separated), 3) Any people or faces visible. Format as JSON with keys: description, keywords, people"
+                                "text": f"{context}Analyze this image. If tags or names are provided, incorporate them into the description when applicable. Provide: 1) A brief description, 2) Keywords for Lightroom (comma-separated), 3) Any people or faces visible, use the location data being provided to confirm the person and refer to them by the name provided. Format as JSON with keys: description, keywords, people"
                             },
                             {
                                 "type": "image_url",
