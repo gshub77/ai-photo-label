@@ -298,6 +298,52 @@ Output strictly valid JSON with the following keys:
                     'people': []
                 }
             
+            # Merge existing extracted keywords into AI-provided keywords, deduplicated
+            def _normalize_kw_merge(val):
+                if not val:
+                    return []
+                if isinstance(val, str):
+                    return [p.strip() for p in val.split(',') if p.strip()]
+                try:
+                    out = []
+                    for item in val:
+                        if item is None:
+                            continue
+                        if isinstance(item, str):
+                            out.extend([p.strip() for p in item.split(',') if p.strip()])
+                        else:
+                            out.append(str(item))
+                    return out
+                except TypeError:
+                    s = str(val).strip()
+                    return [s] if s else []
+
+            try:
+                ai_keywords = result.get('keywords', [])
+                # pull existing keywords gathered earlier if available; otherwise none
+                try:
+                    existing_kw = keywords  # from earlier metadata gathering
+                except NameError:
+                    existing_kw = []
+
+                merged_keywords = []
+                seen = set()
+                for k in _normalize_kw_merge(ai_keywords):
+                    lk = k.lower()
+                    if lk not in seen:
+                        merged_keywords.append(k)
+                        seen.add(lk)
+                for k in _normalize_kw_merge(existing_kw):
+                    lk = k.lower()
+                    if lk not in seen:
+                        merged_keywords.append(k)
+                        seen.add(lk)
+
+                result['keywords'] = ', '.join(merged_keywords)
+                print('DEBUG: Merged keywords (AI + existing):', result['keywords'])
+            except Exception as _e:
+                print('DEBUG: Failed to merge keywords:', _e)
+
             return result
             
         except Exception as e:
