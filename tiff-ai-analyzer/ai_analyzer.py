@@ -49,6 +49,8 @@ class AIAnalyzer:
                     context += f"Known people in image: {', '.join(people)}. "
                 if keywords:
                     context += f"Existing keywords: {', '.join(keywords)}. "
+                print("Context for image analysis:")
+                print(context)
             
             # Call OpenAI Vision API
             response = self.client.chat.completions.create(
