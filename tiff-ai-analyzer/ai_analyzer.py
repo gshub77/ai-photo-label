@@ -32,7 +32,7 @@ class AIAnalyzer:
             
             # Call OpenAI Vision API
             response = self.client.chat.completions.create(
-                model="gpt-4-vision-preview",
+                model="gpt-5",
                 messages=[
                     {
                         "role": "user",
@@ -49,8 +49,7 @@ class AIAnalyzer:
                             }
                         ]
                     }
-                ],
-                max_tokens=500
+                ]
             )
             
             # Parse response
