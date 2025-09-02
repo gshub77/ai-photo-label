@@ -3,6 +3,7 @@ import httpx
 from PIL import Image
 import base64
 import io
+import re
 from xml.etree import ElementTree as ET
 from config import OPENAI_API_KEY, MAX_IMAGE_SIZE
 
@@ -115,6 +116,9 @@ class AIAnalyzer:
                 def _extract_people_regions_from_xmp(xmp_str):
                     try:
                         xml_str = xmp_str.decode('utf-8', errors='ignore') if isinstance(xmp_str, (bytes, bytearray)) else str(xmp_str)
+                        # Strip XMP packet PIs and BOM if present
+                        xml_str = xml_str.lstrip('\ufeff')
+                        xml_str = re.sub(r'<\?xpacket[^>]*\?>', '', xml_str, flags=re.IGNORECASE)
                         root = ET.fromstring(xml_str)
                         NS = {
                             'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
@@ -122,36 +126,100 @@ class AIAnalyzer:
                             'stArea': 'http://ns.adobe.com/xmp/sType/Area#'
                         }
                         regions = []
-                        for desc in root.findall('.//rdf:li/rdf:Description', NS):
+
+                        # Preferred path: within RegionList
+                        for li in root.findall('.//mwg-rs:RegionList/rdf:Bag/rdf:li', NS):
+                            desc = li.find('rdf:Description', NS)
+                            if desc is None:
+                                continue
                             typ = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Type')
                             name = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Name')
+                            area = desc.find('mwg-rs:Area', NS)
+                            if area is None:
+                                continue
+
+                            def _getf(attr):
+                                v = area.get(f'{{{NS["stArea"]}}}{attr}')
+                                try:
+                                    return float(v) if v is not None else None
+                                except Exception:
+                                    return None
+
+                            rotation_val = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                            try:
+                                rotation_val = float(rotation_val) if rotation_val is not None else None
+                            except Exception:
+                                pass
+
                             if (typ and typ.lower() == 'face') or name:
+                                regions.append({
+                                    'name': name or '',
+                                    'x': _getf('x'),
+                                    'y': _getf('y'),
+                                    'w': _getf('w'),
+                                    'h': _getf('h'),
+                                    'rotation': rotation_val
+                                })
+
+                        # Fallback: any rdf:li/rdf:Description (older exports)
+                        if not regions:
+                            for desc in root.findall('.//rdf:li/rdf:Description', NS):
+                                typ = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Type')
+                                name = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Name')
                                 area = desc.find('mwg-rs:Area', NS)
-                                if area is not None:
-                                    def _getf(attr):
-                                        v = area.get(f'{{{NS["stArea"]}}}{attr}')
-                                        try:
-                                            return float(v) if v is not None else None
-                                        except Exception:
-                                            return None
+                                if area is None:
+                                    continue
+
+                                def _getf(attr):
+                                    v = area.get(f'{{{NS["stArea"]}}}{attr}')
+                                    try:
+                                        return float(v) if v is not None else None
+                                    except Exception:
+                                        return None
+
+                                rotation_val = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                                try:
+                                    rotation_val = float(rotation_val) if rotation_val is not None else None
+                                except Exception:
+                                    pass
+
+                                if (typ and typ.lower() == 'face') or name:
                                     regions.append({
                                         'name': name or '',
                                         'x': _getf('x'),
                                         'y': _getf('y'),
                                         'w': _getf('w'),
                                         'h': _getf('h'),
-                                        'rotation': desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                                        'rotation': rotation_val
                                     })
+
                         return regions
                     except Exception:
                         return []
 
                 face_regions = []
-                xmp_src = existing_metadata.get('xmp_xml')
+                # Try several likely locations for embedded XMP
+                xmp_src = (
+                    existing_metadata.get('xmp_xml')
+                    or existing_metadata.get('xmp')
+                    or existing_metadata.get('XMP')
+                    or existing_metadata.get('XMLPacket')
+                    or existing_metadata.get('XML:com.adobe.xmp')
+                    or existing_metadata.get('embedded_xmp')
+                    or existing_metadata.get('raw_xmp')
+                )
                 if xmp_src is None:
                     info = existing_metadata.get('info')
                     if isinstance(info, dict):
-                        for k in ('XML:com.adobe.xmp', 'xmp', 'XMP'):
+                        for k in (
+                            'XML:com.adobe.xmp',
+                            'XMLPacket',
+                            'xmp',
+                            'XMP',
+                            'xmp_xml',
+                            'raw_xmp',
+                            'embedded_xmp'
+                        ):
                             val = info.get(k)
                             if val:
                                 xmp_src = val
@@ -159,8 +227,9 @@ class AIAnalyzer:
                 if xmp_src:
                     face_regions = _extract_people_regions_from_xmp(xmp_src)
                     for r in face_regions:
-                        if r.get('name'):
-                            people.append(r['name'])
+                        nm = r.get('name')
+                        if nm:
+                            people.append(nm)
 
                 # Build context strings
                 if people:
