@@ -255,51 +255,47 @@ class AIAnalyzer:
                     print("DEBUG: Final context for image analysis:\n", context)
             
             # Call OpenAI Responses API (multimodal)
+            # Build inputs
             inputs = [
+                {
+                    "role": "developer",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Return STRICT JSON with keys: description, keywords, people. "
+                                "Treat provided face regions as ground truth using the names in the regions as the true names of the people"
+                                "Mention all named people as subjects always.  so if a name is listed use it as the object of the description instead of man or woman or person."
+                                "Do not invent names. "
+                                "Preserve existing keywords and dedupe. "
+                                "Write a 3–4 sentence description using spatial language and general background terms. "
+                                "Keywords should suit Lightroom search."
+                                "if there is text in the image parse the text into keywords."
+                            ),
+                        }
+                    ],
+                },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "input_text",
-                            "text": f"""{context}Task: Analyze this image.
-
-Constraints and requirements:
-- Treat the "Face regions" JSON in the context as ground truth for presence. If a region has a non-empty "name", assume that person is present in the photo.
-- In the description, mention all such named people as the grammatical subject(s) (e.g., "... shows Alice Smith and Bob Jones ..."), not as "labeled".
-- If there are no named regions but "Known people in image" is present, then mention those names instead.
-- Do NOT invent or infer new names. If a face region lacks a name, refer to it generically (e.g., "an unknown person") without adding a name.
-- Preserve all Existing keywords exactly as provided and add any additional relevant keywords. Deduplicate while keeping originals. Return keywords as a single comma-separated string that includes all existing keywords plus any new ones you add.
-
-Output strictly valid JSON with the following keys:
-- description: 1-2 sentences that naturally mention the provided person name(s) as subjects when applicable (avoid "labeled" phrasing). If multiple named people are present, include all of their names.
-- keywords: a single comma-separated string containing all existing keywords plus any new ones you add (no duplicates).
-- people: an array of person names present in the image, using only the provided names from the face regions when available; otherwise use the "Known people in image" list."""
+                            "text": f"{context}Task: Analyze this image.",
                         },
                         {
                             "type": "input_image",
-                            "image_url": f"data:image/png;base64,{img_base64}"
-                        }
-                    ]
-                }
+                            "image_url": f"data:image/png;base64,{img_base64}",
+                        },
+                    ],
+                },
             ]
-            import json
+
+            # Final payload
             payload = {
                 "model": "gpt-5",
                 "input": inputs,
-                "text": {
-                    "format": { "type": "text" },
-                    "verbosity": "medium"
-                },
-                "reasoning": {
-                    "effort": "medium",
-                    "summary": "auto"
-                },
-                "tools": [],
-                "store": True,
-                "include": [
-                    "reasoning.encrypted_content",
-                    "web_search_call.action.sources"
-                ]
+                "max_output_tokens": 5000,
+                "store": False,
             }
             try:
                 # Print sanitized payload without embedding the base64 image data
@@ -337,10 +333,9 @@ Output strictly valid JSON with the following keys:
                 # Fallback: create structured data from text
                 result = {
                     'description': result_text,
-                    'keywords': [],
-                    'people': []
+                    'keywords': []
                 }
-            
+
             # Merge existing extracted keywords into AI-provided keywords, deduplicated
             def _normalize_kw_merge(val):
                 if not val:
