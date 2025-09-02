@@ -123,96 +123,61 @@ class AIAnalyzer:
                         xml_str = re.sub(r'<\?xpacket[^>]*\?>', '', xml_str, flags=re.IGNORECASE)
                         root = ET.fromstring(xml_str)
 
-                        # Discover actual namespaces used in the document (handles mwg-rs .com vs .org)
-                        def _discover_namespaces(root_elem):
-                            ns = {'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
-                            mwg_rs_uri = None
-                            st_area_uri = None
-                            for el in root_elem.iter():
-                                for k, v in el.attrib.items():
-                                    if k.startswith('{http://www.w3.org/2000/xmlns/}'):
-                                        prefix = k.split('}', 1)[1]
-                                        if prefix == 'mwg-rs' and not mwg_rs_uri:
-                                            mwg_rs_uri = v
-                                        elif prefix == 'stArea' and not st_area_uri:
-                                            st_area_uri = v
-                            ns['mwg-rs'] = mwg_rs_uri or 'http://www.metadataworkinggroup.org/schemas/regions/'
-                            ns['stArea'] = st_area_uri or 'http://ns.adobe.com/xmp/sType/Area#'
-                            return ns
+                        # Helpers to ignore namespaces by matching local tag/attr names
+                        def _has_local_tag(el, local):
+                            t = el.tag
+                            return isinstance(t, str) and (t.endswith('}' + local) or t == local)
 
-                        NS = _discover_namespaces(root)
+                        def _get_local_attr(attrs, local):
+                            for k, v in attrs.items():
+                                if isinstance(k, str) and (k.endswith('}' + local) or k == local):
+                                    return v
+                            return None
+
                         regions = []
 
-                        # Preferred path: within RegionList under Regions (try both with and without Regions wrapper)
-                        for li in root.findall('.//mwg-rs:Regions/mwg-rs:RegionList/rdf:Bag/rdf:li', NS) + \
-                                   root.findall('.//mwg-rs:RegionList/rdf:Bag/rdf:li', NS):
-                            desc = li.find('rdf:Description', NS)
-                            if desc is None:
+                        # Iterate any Description elements that contain an Area child
+                        for desc in root.iter():
+                            if not _has_local_tag(desc, 'Description'):
                                 continue
-                            typ = desc.get(f'{{{NS["mwg-rs"]}}}Type')
-                            name = desc.get(f'{{{NS["mwg-rs"]}}}Name')
-                            area = desc.find('mwg-rs:Area', NS)
+
+                            # Find Area child (namespace-agnostic)
+                            area = None
+                            for child in desc:
+                                if _has_local_tag(child, 'Area'):
+                                    area = child
+                                    break
                             if area is None:
                                 continue
 
+                            typ = _get_local_attr(desc.attrib, 'Type')
+                            name = _get_local_attr(desc.attrib, 'Name')
+                            rotation_raw = _get_local_attr(desc.attrib, 'Rotation')
+                            try:
+                                rotation_val = float(rotation_raw) if rotation_raw is not None else None
+                            except Exception:
+                                rotation_val = None
+
                             def _getf(attr):
-                                v = area.get(f'{{{NS["stArea"]}}}{attr}')
+                                val = _get_local_attr(area.attrib, attr)
                                 try:
-                                    return float(v) if v is not None else None
+                                    return float(val) if val is not None else None
                                 except Exception:
                                     return None
 
-                            rotation_val = desc.get(f'{{{NS["mwg-rs"]}}}Rotation')
-                            try:
-                                rotation_val = float(rotation_val) if rotation_val is not None else None
-                            except Exception:
-                                pass
+                            region = {
+                                'name': name or '',
+                                'x': _getf('x'),
+                                'y': _getf('y'),
+                                'w': _getf('w'),
+                                'h': _getf('h'),
+                                'rotation': rotation_val
+                            }
 
-                            if (typ and str(typ).lower() == 'face') or name:
-                                region = {
-                                    'name': name or '',
-                                    'x': _getf('x'),
-                                    'y': _getf('y'),
-                                    'w': _getf('w'),
-                                    'h': _getf('h'),
-                                    'rotation': rotation_val
-                                }
-                                print('DEBUG: Found region from preferred path:', region)
+                            # Include entries that look like regions: have area coords or name/type hints
+                            if any(region[k] is not None for k in ('x', 'y', 'w', 'h')) or name or (typ and str(typ).lower() == 'face'):
+                                print('DEBUG: Found region (namespace-agnostic):', region)
                                 regions.append(region)
-
-                        # Fallback: any rdf:li/rdf:Description (older exports)
-                        if not regions:
-                            for desc in root.findall('.//rdf:li/rdf:Description', NS):
-                                typ = desc.get(f'{{{NS["mwg-rs"]}}}Type')
-                                name = desc.get(f'{{{NS["mwg-rs"]}}}Name')
-                                area = desc.find('mwg-rs:Area', NS)
-                                if area is None:
-                                    continue
-
-                                def _getf(attr):
-                                    v = area.get(f'{{{NS["stArea"]}}}{attr}')
-                                    try:
-                                        return float(v) if v is not None else None
-                                    except Exception:
-                                        return None
-
-                                rotation_val = desc.get(f'{{{NS["mwg-rs"]}}}Rotation')
-                                try:
-                                    rotation_val = float(rotation_val) if rotation_val is not None else None
-                                except Exception:
-                                    pass
-
-                                if (typ and str(typ).lower() == 'face') or name:
-                                    region = {
-                                        'name': name or '',
-                                        'x': _getf('x'),
-                                        'y': _getf('y'),
-                                        'w': _getf('w'),
-                                        'h': _getf('h'),
-                                        'rotation': rotation_val
-                                    }
-                                    print('DEBUG: Found region from fallback path:', region)
-                                    regions.append(region)
 
                         return regions
                     except Exception as e:
