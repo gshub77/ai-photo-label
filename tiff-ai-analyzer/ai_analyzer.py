@@ -284,14 +284,14 @@ Output strictly valid JSON with the following keys:
             ]
             import json
             payload = {
-                "model": "gpt-5",
+                "model": "gpt-4.1",
                 "input": inputs,
                 "reasoning": {"effort": "high"},
                 "verbosity": "high"
             }
             try:
                 # Print sanitized payload without embedding the base64 image data
-                print("DEBUG: OpenAI request payload (sanitized):")
+                print("DEBUG: OpenAI Responses request payload (sanitized):")
                 sanitized = json.loads(json.dumps(payload))
                 for item in sanitized.get("input", []):
                     if isinstance(item, dict):
