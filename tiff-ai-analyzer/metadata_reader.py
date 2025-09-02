@@ -67,8 +67,7 @@ class MetadataReader:
 
                     # Print extracted tags
                     print(f"Extracted tags: {', '.join(metadata['tags'])}")
-            print("Extracted XMP metadata:")
-            print(metadata)
+            # Suppressed raw XMP metadata printing; pretty-printed XMP is shown elsewhere.
 
         except Exception as xe:
             print(f"Error extracting XMP: {xe}")
