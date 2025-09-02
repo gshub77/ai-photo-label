@@ -28,6 +28,7 @@ class AIAnalyzer:
                         return []
                     if isinstance(val, str):
                         return [p.strip() for p in val.split(',') if p.strip()]
+                    # Try to iterate/flatten common containers
                     try:
                         result = []
                         for item in val:
@@ -36,6 +37,25 @@ class AIAnalyzer:
                             if isinstance(item, str):
                                 parts = [p.strip() for p in item.split(',') if p.strip()]
                                 result.extend(parts)
+                            elif isinstance(item, (list, tuple, set)):
+                                for sub in item:
+                                    if sub is None:
+                                        continue
+                                    if isinstance(sub, str):
+                                        parts = [p.strip() for p in sub.split(',') if p.strip()]
+                                        result.extend(parts)
+                                    else:
+                                        result.append(str(sub))
+                            elif isinstance(item, dict):
+                                # Attempt to pick a representative value
+                                for v in item.values():
+                                    if v is None:
+                                        continue
+                                    if isinstance(v, str):
+                                        parts = [p.strip() for p in v.split(',') if p.strip()]
+                                        result.extend(parts)
+                                    else:
+                                        result.append(str(v))
                             else:
                                 result.append(str(item))
                         return result
@@ -43,14 +63,60 @@ class AIAnalyzer:
                         s = str(val).strip()
                         return [s] if s else []
 
-                people = _normalize_list(existing_metadata.get('people'))
-                keywords = _normalize_list(existing_metadata.get('keywords'))
+                def _gather_context(meta):
+                    kw_set = set()
+                    people_set = set()
+
+                    def _add(val, target_set):
+                        for v in _normalize_list(val):
+                            if v:
+                                target_set.add(v)
+
+                    # Common keyword keys
+                    for k in ('keywords', 'tags', 'subject', 'subjects', 'dc:subject', 'Keywords'):
+                        if k in meta:
+                            _add(meta.get(k), kw_set)
+
+                    # Common people keys
+                    for k in ('people', 'persons', 'faces', 'Persons', 'PersonsInImage', 'microsoft_people', 'PeopleNames'):
+                        if k in meta:
+                            _add(meta.get(k), people_set)
+
+                    # Lightroom hierarchical subjects (e.g., "People|Alice Smith|Family")
+                    for k in ('lr:hierarchicalSubject', 'hierarchicalSubject'):
+                        if k in meta:
+                            for entry in _normalize_list(meta.get(k)):
+                                parts = [p for p in str(entry).split('|') if p]
+                                if parts:
+                                    # Treat leaf as a keyword
+                                    kw_set.add(parts[-1])
+                                    # If under People|..., extract names as people
+                                    if parts[0].lower() == 'people' and len(parts) >= 2:
+                                        for name in parts[1:]:
+                                            people_set.add(name)
+
+                    # Also scan a nested "info" dict for loose keys
+                    info = meta.get('info')
+                    if isinstance(info, dict):
+                        for k, v in info.items():
+                            lk = str(k).lower()
+                            if 'subject' in lk or 'keyword' in lk or 'tags' in lk:
+                                _add(v, kw_set)
+                            if 'people' in lk or 'person' in lk or 'faces' in lk:
+                                _add(v, people_set)
+
+                    # Return as sorted lists for stable output
+                    return sorted(kw_set), sorted(people_set)
+
+                keywords, people = _gather_context(existing_metadata)
+
                 if people:
                     context += f"Known people in image: {', '.join(people)}. "
                 if keywords:
                     context += f"Existing keywords: {', '.join(keywords)}. "
-                print("Context for image analysis:")
-                print(context)
+                if context:
+                    print("Context for image analysis:")
+                    print(context)
             
             # Call OpenAI Vision API
             response = self.client.chat.completions.create(
