@@ -4,6 +4,7 @@ from PIL import Image
 import base64
 import io
 import re
+import json
 from xml.etree import ElementTree as ET
 from config import OPENAI_API_KEY, MAX_IMAGE_SIZE
 
@@ -225,11 +226,31 @@ class AIAnalyzer:
                 if keywords:
                     context += f"Existing keywords: {', '.join(keywords)}. "
                 if face_regions:
-                    locs = []
-                    for r in face_regions:
-                        nm = r.get('name') or 'Unknown'
-                        locs.append(f"{nm}(x={r.get('x')}, y={r.get('y')}, w={r.get('w')}, h={r.get('h')})")
-                    context += "Face regions (normalized 0-1): " + "; ".join(locs) + ". "
+                    try:
+                        regions_for_prompt = []
+                        named_people_in_regions = set()
+                        for r in face_regions:
+                            nm = (r.get("name") or "").strip()
+                            if nm:
+                                named_people_in_regions.add(nm)
+                            regions_for_prompt.append({
+                                "name": nm,
+                                "x": r.get("x"),
+                                "y": r.get("y"),
+                                "w": r.get("w"),
+                                "h": r.get("h"),
+                                "rotation": r.get("rotation")
+                            })
+                        context += "Face regions (normalized 0-1, JSON): " + json.dumps(regions_for_prompt, ensure_ascii=False) + ". "
+                        if named_people_in_regions:
+                            context += "People to mention (from regions): " + ", ".join(sorted(named_people_in_regions)) + ". "
+                    except Exception:
+                        # Fallback to simple text format if JSON serialization fails
+                        locs = []
+                        for r in face_regions:
+                            nm = r.get('name') or 'Unknown'
+                            locs.append(f"{nm}(x={r.get('x')}, y={r.get('y')}, w={r.get('w')}, h={r.get('h')})")
+                        context += "Face regions (normalized 0-1): " + "; ".join(locs) + ". "
                 if context:
                     print("DEBUG: Final context for image analysis:\n", context)
             
@@ -243,16 +264,16 @@ class AIAnalyzer:
                             "text": f"""{context}Task: Analyze this image.
 
 Constraints and requirements:
-- Use provided person names exactly as given (from "Known people in image" and "Face regions"); do not invent names. If a face lacks a provided name, refer to it generically (e.g., "unknown person") and do not add a new name.
-- The description must explicitly use the provided person name(s) when applicable, phrasing them as the subject of the sentence. Prefer constructions like "... shows Roberta Cross ..." instead of '... the subject is labeled Roberta Cross ...'.
-- If multiple named people are present, mention all their names naturally in the description.
+- Treat the "Face regions" JSON in the context as ground truth for presence. If a region has a non-empty "name", assume that person is present in the photo.
+- In the description, mention all such named people as the grammatical subject(s) (e.g., "... shows Alice Smith and Bob Jones ..."), not as "labeled".
+- If there are no named regions but "Known people in image" is present, then mention those names instead.
+- Do NOT invent or infer new names. If a face region lacks a name, refer to it generically (e.g., "an unknown person") without adding a name.
 - Preserve all Existing keywords exactly as provided and add any additional relevant keywords. Deduplicate while keeping originals. Return keywords as a single comma-separated string that includes all existing keywords plus any new ones you add.
-- Prefer provided names for face regions when describing who is in the image.
 
 Output strictly valid JSON with the following keys:
-- description: 1-2 sentences that naturally mention the provided person name(s) as the subject when applicable (avoid "labeled" phrasing).
+- description: 1-2 sentences that naturally mention the provided person name(s) as subjects when applicable (avoid "labeled" phrasing). If multiple named people are present, include all of their names.
 - keywords: a single comma-separated string containing all existing keywords plus any new ones you add (no duplicates).
-- people: an array of person names present in the image, using only the provided names."""
+- people: an array of person names present in the image, using only the provided names from the face regions when available; otherwise use the "Known people in image" list."""
                         },
                         {
                             "type": "image_url",
