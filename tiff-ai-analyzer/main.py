@@ -32,7 +32,7 @@ def main():
     
     # Analyze image with AI
     ai_analyzer = AIAnalyzer()
-    ai_metadata = ai_analyzer.analyze_image(file_path)
+    ai_metadata = ai_analyzer.analyze_image(file_path, existing_metadata=existing_metadata)
     if ai_metadata is None:
         ai_metadata = {}
     print(f"AI metadata: {ai_metadata}")

@@ -23,8 +23,28 @@ class AIAnalyzer:
             # Build prompt with existing metadata context
             context = ""
             if existing_metadata:
-                people = existing_metadata.get('people', [])
-                keywords = existing_metadata.get('keywords', [])
+                def _normalize_list(val):
+                    if not val:
+                        return []
+                    if isinstance(val, str):
+                        return [p.strip() for p in val.split(',') if p.strip()]
+                    try:
+                        result = []
+                        for item in val:
+                            if item is None:
+                                continue
+                            if isinstance(item, str):
+                                parts = [p.strip() for p in item.split(',') if p.strip()]
+                                result.extend(parts)
+                            else:
+                                result.append(str(item))
+                        return result
+                    except TypeError:
+                        s = str(val).strip()
+                        return [s] if s else []
+
+                people = _normalize_list(existing_metadata.get('people'))
+                keywords = _normalize_list(existing_metadata.get('keywords'))
                 if people:
                     context += f"Known people in image: {', '.join(people)}. "
                 if keywords:
@@ -39,7 +59,7 @@ class AIAnalyzer:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"{context}Analyze this image and provide: 1) A brief description, 2) Keywords for Lightroom (comma-separated), 3) Any people or faces visible. Format as JSON with keys: description, keywords, people"
+                                "text": f"{context}Analyze this image. If tags or names are provided, incorporate them into the description when applicable. Provide: 1) A brief description, 2) Keywords for Lightroom (comma-separated), 3) Any people or faces visible. Format as JSON with keys: description, keywords, people"
                             },
                             {
                                 "type": "image_url",
