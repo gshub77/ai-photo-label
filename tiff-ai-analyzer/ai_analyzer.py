@@ -124,7 +124,7 @@ class AIAnalyzer:
                         root = ET.fromstring(xml_str)
                         NS = {
                             'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-                            'mwg-rs': 'http://www.metadataworkinggroup.com/schemas/regions/',  # updated namespace URL
+                            'mwg-rs': 'http://www.metadataworkinggroup.org/schemas/regions/',  # correct namespace
                             'stArea': 'http://ns.adobe.com/xmp/sType/Area#'
                         }
                         regions = []
