@@ -56,12 +56,33 @@ class LightroomExporter:
             
             # Add keywords
             if 'keywords' in metadata:
-                xmp_content += '''            <dc:subject>
+                keywords_val = metadata['keywords']
+                keywords_list = []
+                if isinstance(keywords_val, str):
+                    keywords_list = [k.strip() for k in keywords_val.split(',') if k.strip()]
+                else:
+                    try:
+                        for item in keywords_val:
+                            if item is None:
+                                continue
+                            if isinstance(item, str):
+                                parts = [p.strip() for p in item.split(',') if p.strip()]
+                                keywords_list.extend(parts)
+                            else:
+                                keywords_list.append(str(item))
+                    except TypeError:
+                        # Not iterable; coerce to string
+                        s = str(keywords_val).strip()
+                        if s:
+                            keywords_list = [s]
+
+                if keywords_list:
+                    xmp_content += '''            <dc:subject>
                 <rdf:Bag>
 '''
-                for keyword in metadata['keywords']:
-                    xmp_content += f'                    <rdf:li>{escape(str(keyword))}</rdf:li>\n'
-                xmp_content += '''                </rdf:Bag>
+                    for keyword in keywords_list:
+                        xmp_content += f'                    <rdf:li>{escape(str(keyword))}</rdf:li>\n'
+                    xmp_content += '''                </rdf:Bag>
             </dc:subject>
 '''
             
