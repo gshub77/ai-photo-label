@@ -15,9 +15,11 @@ class MetadataReader:
                 'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
                 'lr': 'http://ns.adobe.com/lightroom/1.0/'
             }
-            tags = root.find(".//lr:weightedFlatSubject/rdf:Bag", namespaces)
-            if tags is not None:
-                return [li.text for li in tags.findall("rdf:li", namespaces)]
+            description = root.find(".//rdf:Description", namespaces)
+            if description is not None:
+                tags = description.find("lr:weightedFlatSubject/rdf:Bag", namespaces)
+                if tags is not None:
+                    return [li.text for li in tags.findall("rdf:li", namespaces)]
         except ET.ParseError as e:
             print(f"Error parsing XMP: {e}")
         return []
@@ -65,6 +67,9 @@ class MetadataReader:
 
                     # Print extracted tags
                     print(f"Extracted tags: {', '.join(metadata['tags'])}")
+            print("Extracted XMP metadata:")
+            print(metadata)
+
         except Exception as xe:
             print(f"Error extracting XMP: {xe}")
 
