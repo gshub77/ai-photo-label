@@ -284,10 +284,22 @@ Output strictly valid JSON with the following keys:
             ]
             import json
             payload = {
-                "model": "gpt-4.1",
+                "model": "gpt-5",
                 "input": inputs,
-                "reasoning": {"effort": "high"},
-                "verbosity": "high"
+                "text": {
+                    "format": { "type": "text" },
+                    "verbosity": "medium"
+                },
+                "reasoning": {
+                    "effort": "medium",
+                    "summary": "auto"
+                },
+                "tools": [],
+                "store": True,
+                "include": [
+                    "reasoning.encrypted_content",
+                    "web_search_call.action.sources"
+                ]
             }
             try:
                 # Print sanitized payload without embedding the base64 image data
