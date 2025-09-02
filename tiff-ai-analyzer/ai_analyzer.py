@@ -3,6 +3,7 @@ import httpx
 from PIL import Image
 import base64
 import io
+from xml.etree import ElementTree as ET
 from config import OPENAI_API_KEY, MAX_IMAGE_SIZE
 
 class AIAnalyzer:
@@ -110,10 +111,68 @@ class AIAnalyzer:
 
                 keywords, people = _gather_context(existing_metadata)
 
+                # Try to extract face regions (names and normalized locations) from embedded XMP
+                def _extract_people_regions_from_xmp(xmp_str):
+                    try:
+                        xml_str = xmp_str.decode('utf-8', errors='ignore') if isinstance(xmp_str, (bytes, bytearray)) else str(xmp_str)
+                        root = ET.fromstring(xml_str)
+                        NS = {
+                            'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+                            'mwg-rs': 'http://www.metadataworkinggroup.org/schemas/regions/',
+                            'stArea': 'http://ns.adobe.com/xmp/sType/Area#'
+                        }
+                        regions = []
+                        for desc in root.findall('.//rdf:li/rdf:Description', NS):
+                            typ = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Type')
+                            name = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Name')
+                            if (typ and typ.lower() == 'face') or name:
+                                area = desc.find('mwg-rs:Area', NS)
+                                if area is not None:
+                                    def _getf(attr):
+                                        v = area.get(f'{{{NS["stArea"]}}}{attr}')
+                                        try:
+                                            return float(v) if v is not None else None
+                                        except Exception:
+                                            return None
+                                    regions.append({
+                                        'name': name or '',
+                                        'x': _getf('x'),
+                                        'y': _getf('y'),
+                                        'w': _getf('w'),
+                                        'h': _getf('h'),
+                                        'rotation': desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                                    })
+                        return regions
+                    except Exception:
+                        return []
+
+                face_regions = []
+                xmp_src = existing_metadata.get('xmp_xml')
+                if xmp_src is None:
+                    info = existing_metadata.get('info')
+                    if isinstance(info, dict):
+                        for k in ('XML:com.adobe.xmp', 'xmp', 'XMP'):
+                            val = info.get(k)
+                            if val:
+                                xmp_src = val
+                                break
+                if xmp_src:
+                    face_regions = _extract_people_regions_from_xmp(xmp_src)
+                    for r in face_regions:
+                        if r.get('name'):
+                            people.append(r['name'])
+
+                # Build context strings
                 if people:
-                    context += f"Known people in image: {', '.join(people)}. "
+                    context += f"Known people in image: {', '.join(sorted(set(people)))}. "
                 if keywords:
                     context += f"Existing keywords: {', '.join(keywords)}. "
+                if face_regions:
+                    locs = []
+                    for r in face_regions:
+                        nm = r.get('name') or 'Unknown'
+                        locs.append(f"{nm}(x={r.get('x')}, y={r.get('y')}, w={r.get('w')}, h={r.get('h')})")
+                    context += "Face regions (normalized 0-1): " + "; ".join(locs) + ". "
                 if context:
                     print("Context for image analysis:")
                     print(context)
