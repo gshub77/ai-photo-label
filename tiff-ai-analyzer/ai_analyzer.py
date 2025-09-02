@@ -242,7 +242,18 @@ class AIAnalyzer:
                         "content": [
                             {
                                 "type": "text",
-                                "text": f"{context}Analyze this image. If tags or names are provided, incorporate them into the description when applicable. Provide: 1) A brief description, 2) Keywords for Lightroom (comma-separated), 3) Any people or faces visible, use the location data being provided to confirm the person and refer to them by the name provided. Format as JSON with keys: description, keywords, people"
+                                "text": f"""{context}Task: Analyze this image.
+
+Constraints and requirements:
+- Use provided person names exactly as given (from "Known people in image" and "Face regions"); do not invent names. If a face lacks a provided name, refer to it generically (e.g., "unknown person") and do not add a new name.
+- The description must explicitly use the provided person name(s) when applicable.
+- Preserve all Existing keywords exactly as provided and add any additional relevant keywords. Deduplicate while keeping originals. Return keywords as a single comma-separated string that includes all existing keywords plus any new ones you add.
+- Prefer provided names for face regions when describing who is in the image.
+
+Output strictly valid JSON with the following keys:
+- description: 1-2 sentences that naturally mention the provided person name(s) when applicable.
+- keywords: a single comma-separated string containing all existing keywords plus any new ones you add (no duplicates).
+- people: an array of person names present in the image, using only the provided names."""
                             },
                             {
                                 "type": "image_url",
