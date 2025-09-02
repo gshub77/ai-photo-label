@@ -122,20 +122,35 @@ class AIAnalyzer:
                         xml_str = xml_str.lstrip('\ufeff')
                         xml_str = re.sub(r'<\?xpacket[^>]*\?>', '', xml_str, flags=re.IGNORECASE)
                         root = ET.fromstring(xml_str)
-                        NS = {
-                            'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-                            'mwg-rs': 'http://www.metadataworkinggroup.org/schemas/regions/',  # correct namespace
-                            'stArea': 'http://ns.adobe.com/xmp/sType/Area#'
-                        }
+
+                        # Discover actual namespaces used in the document (handles mwg-rs .com vs .org)
+                        def _discover_namespaces(root_elem):
+                            ns = {'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
+                            mwg_rs_uri = None
+                            st_area_uri = None
+                            for el in root_elem.iter():
+                                for k, v in el.attrib.items():
+                                    if k.startswith('{http://www.w3.org/2000/xmlns/}'):
+                                        prefix = k.split('}', 1)[1]
+                                        if prefix == 'mwg-rs' and not mwg_rs_uri:
+                                            mwg_rs_uri = v
+                                        elif prefix == 'stArea' and not st_area_uri:
+                                            st_area_uri = v
+                            ns['mwg-rs'] = mwg_rs_uri or 'http://www.metadataworkinggroup.org/schemas/regions/'
+                            ns['stArea'] = st_area_uri or 'http://ns.adobe.com/xmp/sType/Area#'
+                            return ns
+
+                        NS = _discover_namespaces(root)
                         regions = []
 
-                        # Preferred path: within RegionList
-                        for li in root.findall('.//mwg-rs:RegionList/rdf:Bag/rdf:li', NS):
+                        # Preferred path: within RegionList under Regions (try both with and without Regions wrapper)
+                        for li in root.findall('.//mwg-rs:Regions/mwg-rs:RegionList/rdf:Bag/rdf:li', NS) + \
+                                   root.findall('.//mwg-rs:RegionList/rdf:Bag/rdf:li', NS):
                             desc = li.find('rdf:Description', NS)
                             if desc is None:
                                 continue
-                            typ = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Type')
-                            name = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Name')
+                            typ = desc.get(f'{{{NS["mwg-rs"]}}}Type')
+                            name = desc.get(f'{{{NS["mwg-rs"]}}}Name')
                             area = desc.find('mwg-rs:Area', NS)
                             if area is None:
                                 continue
@@ -147,13 +162,13 @@ class AIAnalyzer:
                                 except Exception:
                                     return None
 
-                            rotation_val = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                            rotation_val = desc.get(f'{{{NS["mwg-rs"]}}}Rotation')
                             try:
                                 rotation_val = float(rotation_val) if rotation_val is not None else None
                             except Exception:
                                 pass
 
-                            if (typ and typ.lower() == 'face') or name:
+                            if (typ and str(typ).lower() == 'face') or name:
                                 region = {
                                     'name': name or '',
                                     'x': _getf('x'),
@@ -168,8 +183,8 @@ class AIAnalyzer:
                         # Fallback: any rdf:li/rdf:Description (older exports)
                         if not regions:
                             for desc in root.findall('.//rdf:li/rdf:Description', NS):
-                                typ = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Type')
-                                name = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Name')
+                                typ = desc.get(f'{{{NS["mwg-rs"]}}}Type')
+                                name = desc.get(f'{{{NS["mwg-rs"]}}}Name')
                                 area = desc.find('mwg-rs:Area', NS)
                                 if area is None:
                                     continue
@@ -181,13 +196,13 @@ class AIAnalyzer:
                                     except Exception:
                                         return None
 
-                                rotation_val = desc.get('{http://www.metadataworkinggroup.org/schemas/regions/}Rotation')
+                                rotation_val = desc.get(f'{{{NS["mwg-rs"]}}}Rotation')
                                 try:
                                     rotation_val = float(rotation_val) if rotation_val is not None else None
                                 except Exception:
                                     pass
 
-                                if (typ and typ.lower() == 'face') or name:
+                                if (typ and str(typ).lower() == 'face') or name:
                                     region = {
                                         'name': name or '',
                                         'x': _getf('x'),
