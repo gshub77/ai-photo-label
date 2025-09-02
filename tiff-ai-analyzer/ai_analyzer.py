@@ -246,12 +246,13 @@ class AIAnalyzer:
 
 Constraints and requirements:
 - Use provided person names exactly as given (from "Known people in image" and "Face regions"); do not invent names. If a face lacks a provided name, refer to it generically (e.g., "unknown person") and do not add a new name.
-- The description must explicitly use the provided person name(s) when applicable.
+- The description must explicitly use the provided person name(s) when applicable, phrasing them as the subject of the sentence. Prefer constructions like "... shows Roberta Cross ..." instead of '... the subject is labeled Roberta Cross ...'.
+- If multiple named people are present, mention all their names naturally in the description.
 - Preserve all Existing keywords exactly as provided and add any additional relevant keywords. Deduplicate while keeping originals. Return keywords as a single comma-separated string that includes all existing keywords plus any new ones you add.
 - Prefer provided names for face regions when describing who is in the image.
 
 Output strictly valid JSON with the following keys:
-- description: 1-2 sentences that naturally mention the provided person name(s) when applicable.
+- description: 1-2 sentences that naturally mention the provided person name(s) as the subject when applicable (avoid "labeled" phrasing).
 - keywords: a single comma-separated string containing all existing keywords plus any new ones you add (no duplicates).
 - people: an array of person names present in the image, using only the provided names."""
                             },
