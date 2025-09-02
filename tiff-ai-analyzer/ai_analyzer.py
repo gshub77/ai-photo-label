@@ -80,7 +80,7 @@ class AIAnalyzer:
                             _add(meta.get(k), kw_set)
 
                     # Common people keys
-                    for k in ('people', 'persons', 'faces', 'Persons', 'PersonsInImage', 'microsoft_people', 'PeopleNames'):
+                    for k in ('people', 'persons', 'faces', 'Persons', 'PersonsInImage', 'RegionList', 'Name'):
                         if k in meta:
                             _add(meta.get(k), people_set)
 
@@ -111,6 +111,8 @@ class AIAnalyzer:
                     return sorted(kw_set), sorted(people_set)
 
                 keywords, people = _gather_context(existing_metadata)
+                print('DEBUG: Extracted keywords:', keywords)
+                print('DEBUG: Extracted people from metadata:', people)
 
                 # Try to extract face regions (names and normalized locations) from embedded XMP
                 def _extract_people_regions_from_xmp(xmp_str):
@@ -122,7 +124,7 @@ class AIAnalyzer:
                         root = ET.fromstring(xml_str)
                         NS = {
                             'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-                            'mwg-rs': 'http://www.metadataworkinggroup.org/schemas/regions/',
+                            'mwg-rs': 'http://www.metadataworkinggroup.com/schemas/regions/',  # updated namespace URL
                             'stArea': 'http://ns.adobe.com/xmp/sType/Area#'
                         }
                         regions = []
@@ -152,14 +154,16 @@ class AIAnalyzer:
                                 pass
 
                             if (typ and typ.lower() == 'face') or name:
-                                regions.append({
+                                region = {
                                     'name': name or '',
                                     'x': _getf('x'),
                                     'y': _getf('y'),
                                     'w': _getf('w'),
                                     'h': _getf('h'),
                                     'rotation': rotation_val
-                                })
+                                }
+                                print('DEBUG: Found region from preferred path:', region)
+                                regions.append(region)
 
                         # Fallback: any rdf:li/rdf:Description (older exports)
                         if not regions:
@@ -184,17 +188,20 @@ class AIAnalyzer:
                                     pass
 
                                 if (typ and typ.lower() == 'face') or name:
-                                    regions.append({
+                                    region = {
                                         'name': name or '',
                                         'x': _getf('x'),
                                         'y': _getf('y'),
                                         'w': _getf('w'),
                                         'h': _getf('h'),
                                         'rotation': rotation_val
-                                    })
+                                    }
+                                    print('DEBUG: Found region from fallback path:', region)
+                                    regions.append(region)
 
                         return regions
-                    except Exception:
+                    except Exception as e:
+                        print('DEBUG: Exception in _extract_people_regions_from_xmp:', e)
                         return []
 
                 face_regions = []
@@ -226,6 +233,7 @@ class AIAnalyzer:
                                 break
                 if xmp_src:
                     face_regions = _extract_people_regions_from_xmp(xmp_src)
+                    print('DEBUG: Extracted face regions from XMP:', face_regions)
                     for r in face_regions:
                         nm = r.get('name')
                         if nm:
@@ -243,8 +251,7 @@ class AIAnalyzer:
                         locs.append(f"{nm}(x={r.get('x')}, y={r.get('y')}, w={r.get('w')}, h={r.get('h')})")
                     context += "Face regions (normalized 0-1): " + "; ".join(locs) + ". "
                 if context:
-                    print("Context for image analysis:")
-                    print(context)
+                    print("DEBUG: Final context for image analysis:\n", context)
             
             # Call OpenAI Vision API
             response = self.client.chat.completions.create(
